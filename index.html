@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Project: IT‑Hardware Memory (Hauptspiel)
-  Version: 2.5 (Main)
+  Version: 2.6 (Main)
   Date: 2025-08-30 (Europe/Zurich)
   Changes vs 2.4:
     • Randomizer‑Set: VRAM hinzugefügt.
@@ -82,7 +82,7 @@
         <option value="easy">Einfach – Begriff ↔ Beschreibung (12 Karten)</option>
         <option value="medium">Mittel – Begriff ↔ Beschreibung (18 Karten)</option>
         <option value="hard">Schwer – Begriff ↔ Beschreibung (24 Karten)</option>
-        <option value="hard_split">Schwer (Spalten) – Begriffe links sichtbar</option>
+        <option value="hard_split">Mix (Einfach bis Schwer)</option>
         <option value="random">Randomizer (Spalten) – 24 Karten (60% neu / 40% alt)</option>
       </select>
       <button id="startBtn" class="primary">Start</button>
@@ -382,7 +382,7 @@ function getScoresFor(diff){ try{ var arr = JSON.parse(localStorage.getItem('mem
 function saveScore(entry){ var key='memScores_'+state.difficulty; var list=getScoresFor(state.difficulty); list.unshift(entry); if(list.length>50) list=list.slice(0,50); localStorage.setItem(key, JSON.stringify(list)); }
 function renderScores(){ var el=document.getElementById('scoreList'); if(!el) return; var list=getScoresFor(state.difficulty); if(!list.length){ el.innerHTML='<div style="color:var(--muted);font-size:12px;padding:6px 0">Noch keine Scores gespeichert.</div>'; return;} var html='<table><thead><tr><th>#</th><th>Punkte</th><th>Zeit</th><th>Züge</th><th>Treffer</th><th>Datum</th></tr></thead><tbody>'; for(var i=0;i<list.length;i++){ var s=list[i]; html+='<tr><td>'+(i+1)+'</td><td>'+s.points+'</td><td>'+formatTime(s.time)+'</td><td>'+s.moves+'</td><td>'+s.hits+'</td><td>'+new Date(s.date).toLocaleString()+'</td></tr>'; } html+='</tbody></table>'; el.innerHTML=html; }
 function topN(list,n){ return list.slice().sort(function(a,b){ if(b.points!==a.points) return b.points-a.points; return a.time-b.time; }).slice(0,n); }
-function openLeaderboard(){ var diffs=[{k:'easy',label:'Einfach'},{k:'medium',label:'Mittel'},{k:'hard',label:'Schwer'},{k:'hard_split',label:'Schwer (Spalten)'},{k:'random',label:'Randomizer'}]; var html=''; for(var i=0;i<diffs.length;i++){ var d=diffs[i]; var arr=topN(getScoresFor(d.k),3); html += '<h3 style="margin:8px 0">'+d.label+'</h3>'; if(!arr.length){ html+='<div style="color:var(--muted);font-size:12px">Noch keine Daten.</div>'; } else { html+='<div class="scorelist"><table><thead><tr><th>#</th><th>Punkte</th><th>Zeit</th><th>Züge</th><th>Treffer</th><th>Datum</th></tr></thead><tbody>'; for(var j=0;j<arr.length;j++){ var s=arr[j]; html+='<tr><td>'+(j+1)+'</td><td>'+s.points+'</td><td>'+formatTime(s.time)+'</td><td>'+s.moves+'</td><td>'+s.hits+'</td><td>'+new Date(s.date).toLocaleString()+'</td></tr>'; } html+='</tbody></table></div>'; } } if(leaderContent) leaderContent.innerHTML=html; if(leaderModal) leaderModal.classList.add('show'); }
+function openLeaderboard(){ var diffs=[{k:'easy',label:'Einfach'},{k:'medium',label:'Mittel'},{k:'hard',label:'Schwer'},{k:'hard_split',label:'Mix (Einfach bis Schwer)'},{k:'random',label:'Randomizer'}]; var html=''; for(var i=0;i<diffs.length;i++){ var d=diffs[i]; var arr=topN(getScoresFor(d.k),3); html += '<h3 style="margin:8px 0">'+d.label+'</h3>'; if(!arr.length){ html+='<div style="color:var(--muted);font-size:12px">Noch keine Daten.</div>'; } else { html+='<div class="scorelist"><table><thead><tr><th>#</th><th>Punkte</th><th>Zeit</th><th>Züge</th><th>Treffer</th><th>Datum</th></tr></thead><tbody>'; for(var j=0;j<arr.length;j++){ var s=arr[j]; html+='<tr><td>'+(j+1)+'</td><td>'+s.points+'</td><td>'+formatTime(s.time)+'</td><td>'+s.moves+'</td><td>'+s.hits+'</td><td>'+new Date(s.date).toLocaleString()+'</td></tr>'; } html+='</tbody></table></div>'; } } if(leaderContent) leaderContent.innerHTML=html; if(leaderModal) leaderModal.classList.add('show'); }
 
 // ---- Punkte & Sterne -------------------------------------------------------
 function diffParams(){
