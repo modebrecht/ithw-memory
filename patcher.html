@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Patcher</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      background: linear-gradient(135deg, #f3f4f6 0%, #dbeafe 100%);
+      color: #111827;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+      box-sizing: border-box;
+    }
+
+    .panel {
+      width: min(960px, 100%);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(10px);
+      border-radius: 1.25rem;
+      box-shadow: 0 25px 50px -20px rgba(15, 23, 42, 0.4);
+      padding: clamp(1.75rem, 4vw, 3rem);
+      box-sizing: border-box;
+    }
+
+    h1 {
+      margin-top: 0;
+      margin-bottom: 0.75rem;
+      font-size: clamp(2rem, 4vw, 2.75rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: #1f2937;
+    }
+
+    p.description {
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      font-size: 1.05rem;
+      line-height: 1.6;
+      color: #374151;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+      color: #1f2937;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 260px;
+      padding: 1rem;
+      border-radius: 0.85rem;
+      border: 1px solid rgba(148, 163, 184, 0.8);
+      background-color: rgba(248, 250, 252, 0.85);
+      resize: vertical;
+      font-family: "Fira Code", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+      box-sizing: border-box;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+      background-color: #fff;
+    }
+
+    .field {
+      margin-bottom: 1.75rem;
+    }
+
+    input[type="file"] {
+      width: 100%;
+      padding: 0.85rem;
+      border-radius: 0.85rem;
+      border: 1px dashed rgba(148, 163, 184, 0.9);
+      background-color: rgba(255, 255, 255, 0.95);
+      transition: border-color 0.2s ease, background-color 0.2s ease;
+      box-sizing: border-box;
+      cursor: pointer;
+    }
+
+    input[type="file"]:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      cursor: pointer;
+      width: 100%;
+      padding: clamp(1rem, 2.5vw, 1.35rem);
+      border-radius: 0.95rem;
+      font-size: clamp(1.15rem, 2.5vw, 1.5rem);
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: white;
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #1e40af 100%);
+      box-shadow: 0 15px 35px -12px rgba(37, 99, 235, 0.55);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 18px 40px -12px rgba(37, 99, 235, 0.6);
+      filter: brightness(1.02);
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(1px);
+      box-shadow: 0 12px 28px -14px rgba(30, 64, 175, 0.6);
+    }
+
+    button:disabled {
+      cursor: wait;
+      filter: grayscale(0.2) brightness(0.85);
+      box-shadow: none;
+    }
+
+    .status {
+      margin-top: 1.5rem;
+      padding: 1rem 1.25rem;
+      border-radius: 0.9rem;
+      border: 1px solid transparent;
+      font-size: 0.98rem;
+      line-height: 1.6;
+      display: none;
+      white-space: pre-wrap;
+    }
+
+    .status.visible {
+      display: block;
+    }
+
+    .status--info {
+      background-color: #eff6ff;
+      border-color: #93c5fd;
+      color: #1e3a8a;
+    }
+
+    .status--success {
+      background-color: #ecfdf5;
+      border-color: #6ee7b7;
+      color: #047857;
+    }
+
+    .status--error {
+      background-color: #fef2f2;
+      border-color: #fca5a5;
+      color: #b91c1c;
+    }
+
+    @media (max-width: 600px) {
+      textarea {
+        min-height: 220px;
+      }
+
+      .panel {
+        padding: 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <h1>Patch an Uploaded File</h1>
+    <p class="description">
+      Paste a unified diff (patch) into the box below, choose the file you would like to patch, and press the button. Once the patch
+      is applied successfully, the patched file will download automatically.
+    </p>
+
+    <div class="field">
+      <label for="patchText">Patch</label>
+      <textarea id="patchText" placeholder="Paste your git patch here..."></textarea>
+    </div>
+
+    <div class="field">
+      <label for="fileInput">Current file</label>
+      <input type="file" id="fileInput" />
+    </div>
+
+    <button type="button" id="applyPatchButton">PATCH Uploaded File</button>
+
+    <div id="status" class="status" role="alert" aria-live="polite" hidden></div>
+  </main>
+
+  <script>
+    (function () {
+      const patchTextArea = document.getElementById('patchText');
+      const fileInput = document.getElementById('fileInput');
+      const applyPatchButton = document.getElementById('applyPatchButton');
+      const statusEl = document.getElementById('status');
+
+      const STATUS_CLASS_MAP = {
+        info: 'status--info',
+        success: 'status--success',
+        error: 'status--error',
+      };
+
+      function showStatus(type, message) {
+        statusEl.textContent = message;
+        statusEl.className = 'status visible ' + (STATUS_CLASS_MAP[type] || '');
+        statusEl.hidden = false;
+      }
+
+      function clearStatus() {
+        statusEl.textContent = '';
+        statusEl.className = 'status';
+        statusEl.hidden = true;
+      }
+
+      function triggerDownload(text, fileName) {
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }, 0);
+      }
+
+      function normalizeLineEndings(text) {
+        return text.replace(/\r\n/g, '\n');
+      }
+
+      function detectOriginalEOL(text) {
+        return /\r\n/.test(text) ? '\r\n' : '\n';
+      }
+
+      function restoreLineEndings(text, eol) {
+        if (eol === '\n') {
+          return text;
+        }
+        return text.replace(/\n/g, eol);
+      }
+
+      function splitTextPreservingTrailing(text) {
+        if (!text) {
+          return { lines: [], hasTrailingNewline: false };
+        }
+        const parts = text.split('\n');
+        if (parts.length === 1 && parts[0] === '') {
+          return { lines: [], hasTrailingNewline: false };
+        }
+        let hasTrailingNewline = false;
+        if (parts[parts.length - 1] === '') {
+          hasTrailingNewline = true;
+          parts.pop();
+        }
+        return { lines: parts, hasTrailingNewline };
+      }
+
+      function extractPatchBlocks(lines) {
+        const blocks = [];
+        let currentLines = [];
+        let currentPaths = { oldPath: null, newPath: null };
+
+        const pushCurrent = () => {
+          if (!currentLines.length) {
+            return;
+          }
+          blocks.push({
+            lines: currentLines.slice(),
+            oldPath: currentPaths.oldPath,
+            newPath: currentPaths.newPath,
+          });
+          currentLines = [];
+          currentPaths = { oldPath: null, newPath: null };
+        };
+
+        for (let i = 0; i < lines.length; i += 1) {
+          const line = lines[i];
+          if (line.startsWith('diff ') && currentLines.length) {
+            pushCurrent();
+          }
+          if (!currentLines.length && line.trim() === '') {
+            continue;
+          }
+          currentLines.push(line);
+          if (line.startsWith('--- ')) {
+            currentPaths.oldPath = line.slice(4).trim();
+          } else if (line.startsWith('+++ ')) {
+            currentPaths.newPath = line.slice(4).trim();
+          }
+        }
+
+        pushCurrent();
+        return blocks;
+      }
+
+      function normalizePatchPath(path) {
+        if (!path || path === '/dev/null') {
+          return null;
+        }
+        return path.replace(/^[ab]\//, '');
+      }
+
+      function getPatchFileBaseName(path) {
+        if (!path) {
+          return null;
+        }
+        const normalized = normalizePatchPath(path);
+        if (!normalized) {
+          return null;
+        }
+        const segments = normalized.split(/\\|\//);
+        return segments[segments.length - 1] || null;
+      }
+
+      function selectPatchBlock(blocks, targetFileName, fullPatchLines) {
+        if (!blocks.length) {
+          const hasContent = fullPatchLines.some((line) => line.trim() !== '');
+          if (!hasContent) {
+            throw new Error('Patch input is empty.');
+          }
+          return { lines: fullPatchLines.slice(), oldPath: null, newPath: null };
+        }
+        if (blocks.length === 1) {
+          return blocks[0];
+        }
+        const matches = blocks.filter((block) => {
+          const candidates = [];
+          const oldName = getPatchFileBaseName(block.oldPath);
+          const newName = getPatchFileBaseName(block.newPath);
+          if (oldName) {
+            candidates.push(oldName);
+          }
+          if (newName) {
+            candidates.push(newName);
+          }
+          return candidates.some((name) => name === targetFileName);
+        });
+
+        if (matches.length === 1) {
+          return matches[0];
+        }
+        if (matches.length === 0) {
+          throw new Error(`Patch does not contain changes for the uploaded file "${targetFileName}".`);
+        }
+        throw new Error(`Patch contains multiple sections that match "${targetFileName}". Please keep only the relevant diff.`);
+      }
+
+      function applyPatchBlock(normalizedOriginal, blockLines) {
+        const originalInfo = splitTextPreservingTrailing(normalizedOriginal);
+        const originalLines = originalInfo.lines;
+        const outputLines = [];
+        let originalIndex = 0;
+        let i = 0;
+        let outputHasTrailingNewline = originalInfo.hasTrailingNewline;
+        let sawHunk = false;
+
+        const assertOriginalIndexInRange = () => {
+          if (originalIndex >= originalLines.length) {
+            throw new Error('Patch references lines beyond the end of the file.');
+          }
+        };
+
+        while (i < blockLines.length) {
+          const header = blockLines[i];
+          if (!header.startsWith('@@')) {
+            i += 1;
+            continue;
+          }
+          sawHunk = true;
+          const match = header.match(/^@@ -([0-9]+)(?:,([0-9]+))? \+([0-9]+)(?:,([0-9]+))? @@/);
+          if (!match) {
+            throw new Error(`Invalid hunk header: ${header}`);
+          }
+
+          const startOriginal = Number(match[1]);
+          const countOriginal = match[2] ? Number(match[2]) : 1;
+          const startNew = Number(match[3]);
+          const countNew = match[4] ? Number(match[4]) : 1;
+          const targetOriginalIndex = startOriginal > 0 ? startOriginal - 1 : 0;
+
+          if (targetOriginalIndex < originalIndex) {
+            throw new Error('Patch hunks overlap or are out of order.');
+          }
+
+          while (originalIndex < targetOriginalIndex) {
+            assertOriginalIndexInRange();
+            outputLines.push(originalLines[originalIndex]);
+            originalIndex += 1;
+          }
+
+          i += 1;
+          let consumedOriginal = 0;
+          let producedNew = 0;
+          let lastOperation = null;
+
+          while (i < blockLines.length) {
+            const hunkLine = blockLines[i];
+            if (hunkLine.startsWith('@@') || hunkLine.startsWith('diff ') || hunkLine.startsWith('--- ') || hunkLine.startsWith('+++ ')) {
+              break;
+            }
+            if (hunkLine === '') {
+              i += 1;
+              continue;
+            }
+            if (hunkLine.startsWith('\\')) {
+              if (lastOperation === 'addition' || lastOperation === 'context') {
+                outputHasTrailingNewline = false;
+              }
+              i += 1;
+              continue;
+            }
+
+            const marker = hunkLine[0];
+            const content = hunkLine.slice(1);
+
+            if (marker === ' ') {
+              assertOriginalIndexInRange();
+              const originalLine = originalLines[originalIndex];
+              if (originalLine !== content) {
+                const expectedLineNumber = startOriginal + consumedOriginal;
+                throw new Error(`Patch context mismatch at original line ${expectedLineNumber}.\nExpected: "${content}"\nFound: "${originalLine}"`);
+              }
+              outputLines.push(originalLine);
+              originalIndex += 1;
+              consumedOriginal += 1;
+              producedNew += 1;
+              lastOperation = 'context';
+            } else if (marker === '-') {
+              assertOriginalIndexInRange();
+              const originalLine = originalLines[originalIndex];
+              if (originalLine !== content) {
+                const expectedLineNumber = startOriginal + consumedOriginal;
+                throw new Error(`Patch removal mismatch at original line ${expectedLineNumber}.\nExpected to remove: "${content}"\nFound: "${originalLine}"`);
+              }
+              originalIndex += 1;
+              consumedOriginal += 1;
+              lastOperation = 'removal';
+            } else if (marker === '+') {
+              outputLines.push(content);
+              producedNew += 1;
+              outputHasTrailingNewline = true;
+              lastOperation = 'addition';
+            } else {
+              throw new Error(`Unrecognized patch line: ${hunkLine}`);
+            }
+
+            i += 1;
+          }
+
+          if (consumedOriginal !== countOriginal) {
+            throw new Error(`Patch hunk expected to touch ${countOriginal} original line(s) but matched ${consumedOriginal}.`);
+          }
+          if (producedNew !== countNew) {
+            throw new Error(`Patch hunk expected to produce ${countNew} new line(s) but produced ${producedNew}.`);
+          }
+        }
+
+        if (!sawHunk) {
+          throw new Error('No hunks were found in the provided patch.');
+        }
+
+        while (originalIndex < originalLines.length) {
+          outputLines.push(originalLines[originalIndex]);
+          originalIndex += 1;
+        }
+
+        let result = outputLines.join('\n');
+        if (outputLines.length > 0 && outputHasTrailingNewline) {
+          result += '\n';
+        }
+        return result;
+      }
+
+      function applyPatchToText(originalText, patchText, fileName) {
+        const normalizedOriginal = normalizeLineEndings(originalText);
+        const normalizedPatch = normalizeLineEndings(patchText);
+        const patchLines = normalizedPatch.split('\n');
+        const blocks = extractPatchBlocks(patchLines);
+        const block = selectPatchBlock(blocks, fileName, patchLines);
+        return applyPatchBlock(normalizedOriginal, block.lines);
+      }
+
+      async function handlePatchClick() {
+        const patchText = patchTextArea.value;
+        if (!patchText || !patchText.trim()) {
+          showStatus('error', 'Please paste a git patch into the text area.');
+          patchTextArea.focus();
+          return;
+        }
+
+        if (!fileInput.files || fileInput.files.length === 0) {
+          showStatus('error', 'Please choose the current file you would like to patch.');
+          fileInput.focus();
+          return;
+        }
+
+        clearStatus();
+        applyPatchButton.disabled = true;
+        applyPatchButton.textContent = 'Patching…';
+        showStatus('info', 'Applying patch…');
+
+        try {
+          const file = fileInput.files[0];
+          const originalText = await file.text();
+          const patchedNormalized = applyPatchToText(originalText, patchText, file.name);
+          const finalText = restoreLineEndings(patchedNormalized, detectOriginalEOL(originalText));
+          triggerDownload(finalText, file.name);
+          showStatus('success', `Patch applied successfully. Downloading updated "${file.name}".`);
+        } catch (error) {
+          console.error(error);
+          showStatus('error', error && error.message ? error.message : 'The patch could not be applied.');
+        } finally {
+          applyPatchButton.disabled = false;
+          applyPatchButton.textContent = 'PATCH Uploaded File';
+        }
+      }
+
+      applyPatchButton.addEventListener('click', () => {
+        handlePatchClick();
+      });
+    })();
+  </script>
+</body>
+</html>
