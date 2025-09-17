@@ -1,18 +1,17 @@
 <!DOCTYPE html>
 <!--
   Project: IT‑Hardware Memory (Hauptspiel)
-  Version: 2.6 (Main)
+  Version: 2.7 (Main)
   Date: 2025-08-30 (Europe/Zurich)
-  Changes vs 2.4:
-    • Randomizer‑Set: VRAM hinzugefügt.
-    • Randomizer‑Set: Gehäuselüfter hinzugefügt.
-    • Randomizer‑Set: AIO‑Wasserkühlung hinzugefügt.
+  Changes vs 2.6:
+    • Mobilgeräte: Automatische Kartengröße (80 px) & kleinere Text-Voreinstellung.
+    • Mix/Randomizer: Vier Karten pro Reihe auch auf schmalen Displays möglich.
 -->
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>🧩 IT‑Hardware Memory – v2.5</title>
+  <title>🧩 IT‑Hardware Memory – v2.7</title>
   <style>
     :root{
       --bg:#0f1115; --card:#171a21; --card-front:#1f2430; --accent:#13c2c2; --good:#19be6b; --bad:#ff4d4f; --text:#e8ecf1; --muted:#9aa4b2; --grid-gap:8px;
@@ -56,6 +55,21 @@
     .shake{ animation:shake .32s linear }
     @keyframes shake{ 20%{transform:translateX(-3px)} 40%{transform:translateX(3px)} 60%{transform:translateX(-2px)} 80%{transform:translateX(2px)} }
 
+    @media (max-width: 720px){
+      :root{ --grid-gap:6px; }
+      header{ padding:16px 12px 8px; }
+      .controls{ gap:8px; }
+      select,button{ font-size:13px; padding:9px 10px; }
+      .stats{ flex-wrap:wrap; gap:6px; }
+      .stat{ flex:1 1 calc(50% - 6px); }
+      main{ margin:16px auto; padding:0 12px 24px; }
+      .dialog{ width:min(520px,96vw); }
+    }
+    @media (max-width: 480px){
+      .stats{ flex-direction:column; }
+      .stat{ width:100%; }
+    }
+
     /* Spaltenmodus */
     .board.split{ grid-template-columns:1fr 1fr; align-items:start }
     .board.split .col{ display:grid; grid-template-columns:repeat(auto-fit, minmax(var(--card-min), 1fr)); gap:var(--grid-gap) }
@@ -95,7 +109,7 @@
         <span id="flipVal">1.1s</span>
       </label>
       <label style="color:var(--muted); display:flex; align-items:center; gap:8px">Kartengröße:
-        <input id="cardSize" type="range" min="100" max="300" step="10" value="170" />
+        <input id="cardSize" type="range" min="80" max="300" step="10" value="170" />
         <span id="sizeVal">170px</span>
       </label>
       <label style="color:var(--muted); display:flex; align-items:center; gap:8px">Textgröße:
@@ -143,7 +157,7 @@
   </div>
 
   <script>
-// ===== IT‑Hardware Memory – v2.5 Script =====
+// ===== IT‑Hardware Memory – v2.7 Script =====
 (function(){ window.addEventListener('error', function(e){ try{ var bar=document.getElementById('jsError'); if(!bar){ bar=document.createElement('div'); bar.id='jsError'; bar.style.cssText='position:fixed;left:0;right:0;bottom:0;background:#3b0b0b;color:#fff;padding:8px 12px;font:12px/1.4 system-ui;z-index:9999;'; document.body.appendChild(bar);} bar.textContent='JS-Fehler: '+e.message+(e.lineno?(' @'+e.lineno+(e.colno?(':'+e.colno):'')):''); }catch(_){}}); })();
 
 // ---- Datensätze ------------------------------------------------------------
@@ -183,7 +197,7 @@ var SET_HARD = [
 ];
 
 // Zusatz-Set für Randomizer (neue Items)
-// v2.5: VRAM hinzugefügt; v2.4: Gehäuselüfter; v2.3: AIO-Wasserkühlung
+// v2.7: Responsive Defaults aktualisiert (Mobile); v2.5: VRAM; v2.4: Gehäuselüfter; v2.3: AIO-Wasserkühlung
 var SET_NEW = [
   {id:'usbc',   emoji:'⭕', term:'USB‑C', desc:'Beidseitig steckbarer USB‑Stecker; Daten, Strom und teils Video.'},
   {id:'usba',   emoji:'🔌', term:'USB‑A', desc:'Klassischer rechteckiger USB‑Stecker für viele Geräte.'},
@@ -227,23 +241,101 @@ var leaderModal = document.getElementById('leaderModal');
 var leaderContent = document.getElementById('leaderContent');
 var closeLeader = document.getElementById('closeLeader');
 
+var CARD_MIN_DESKTOP = 170;
+var CARD_MIN_COMPACT = 80;
+var CARD_MIN_MAX = 300;
+var TEXT_SIZE_DESKTOP = 12;
+var TEXT_SIZE_COMPACT = 11;
+var COMPACT_QUERY = '(max-width: 720px)';
+var compactMedia = null;
+
+function storedNumber(key){
+  try {
+    var raw = localStorage.getItem(key);
+    if(raw===null) return null;
+    var num = Number(raw);
+    return isNaN(num) ? null : num;
+  } catch(_) {
+    return null;
+  }
+}
+function isCompactViewport(){
+  if(typeof window === 'undefined') return false;
+  if(window.matchMedia){
+    return window.matchMedia(COMPACT_QUERY).matches;
+  }
+  var vw = window.innerWidth || document.documentElement.clientWidth || 0;
+  return vw <= 720;
+}
+
 // ---- State -----------------------------------------------------------------
 function resetState(){
+  var storedDelay = storedNumber('memFlipDelay');
+  var storedCard = storedNumber('memCardMin');
+  var storedText = storedNumber('memTextSize');
   return {
     running:false, difficulty:'easy',
     deck:[], flipped:[], lock:false,
     points:0, moves:0, hits:0, misses:0,
     combo:0, maxCombo:0, comboBonus:0, totalPairs:0,
     timer:null, startTime:null,
-    flipDelay: Number(localStorage.getItem('memFlipDelay')) || 1100,
-    cardMin: Number(localStorage.getItem('memCardMin')) || 170,
-    textSize: Number(localStorage.getItem('memTextSize')) || 12,
+    flipDelay: storedDelay!==null ? storedDelay : 1100,
+    cardMin: storedCard!==null ? storedCard : (isCompactViewport()?CARD_MIN_COMPACT:CARD_MIN_DESKTOP),
+    textSize: storedText!==null ? storedText : (isCompactViewport()?TEXT_SIZE_COMPACT:TEXT_SIZE_DESKTOP),
+    cardMinUserSet: storedCard!==null,
+    textSizeUserSet: storedText!==null,
     // Spaltenmodussteuerung
     autoSelectPermit:false,
     modeSplit:false, deckLeft:[], deckRight:[], selectedLeft:null
   };
 }
 var state = resetState();
+
+function applyCardSize(persist){
+  var original = state.cardMin;
+  var sliderMax = (sizeSlider && sizeSlider.max) ? Number(sizeSlider.max) : CARD_MIN_MAX;
+  if(isNaN(sliderMax) || sliderMax <= CARD_MIN_COMPACT) sliderMax = CARD_MIN_MAX;
+  var sanitized = Math.max(CARD_MIN_COMPACT, Math.min(sliderMax, Math.round(state.cardMin)));
+  state.cardMin = sanitized;
+  document.documentElement.style.setProperty('--card-min', sanitized+'px');
+  if(sizeSlider){ sizeSlider.value = String(sanitized); }
+  if(sizeVal){ sizeVal.textContent = sanitized+'px'; }
+  if(persist){
+    try{ localStorage.setItem('memCardMin', String(sanitized)); }catch(_){ }
+    state.cardMinUserSet = true;
+  } else if(state.cardMinUserSet && sanitized !== original){
+    try{ localStorage.setItem('memCardMin', String(sanitized)); }catch(_){ }
+  }
+}
+function applyTextSize(persist){
+  var original = state.textSize;
+  var sliderMax = (textSlider && textSlider.max) ? Number(textSlider.max) : 32;
+  if(isNaN(sliderMax) || sliderMax <= 8) sliderMax = 32;
+  var sliderMin = (textSlider && textSlider.min) ? Number(textSlider.min) : 10;
+  if(isNaN(sliderMin) || sliderMin < 8) sliderMin = 8;
+  var sanitized = Math.max(sliderMin, Math.min(sliderMax, Math.round(state.textSize)));
+  state.textSize = sanitized;
+  document.documentElement.style.setProperty('--card-text', sanitized+'px');
+  if(textSlider){ textSlider.value = String(sanitized); }
+  if(textSizeVal){ textSizeVal.textContent = sanitized+'px'; }
+  if(persist){
+    try{ localStorage.setItem('memTextSize', String(sanitized)); }catch(_){ }
+    state.textSizeUserSet = true;
+  } else if(state.textSizeUserSet && sanitized !== original){
+    try{ localStorage.setItem('memTextSize', String(sanitized)); }catch(_){ }
+  }
+}
+function handleCompactChange(e){
+  var matches = !!(e && e.matches);
+  if(!state.cardMinUserSet){
+    state.cardMin = matches ? CARD_MIN_COMPACT : CARD_MIN_DESKTOP;
+    applyCardSize(false);
+  }
+  if(!state.textSizeUserSet){
+    state.textSize = matches ? TEXT_SIZE_COMPACT : TEXT_SIZE_DESKTOP;
+    applyTextSize(false);
+  }
+}
 
 // ---- Utils -----------------------------------------------------------------
 function formatTime(ms){ var s=Math.floor(ms/1000), m=Math.floor(s/60), r=s%60; return (m<10?'0'+m:m)+':' + (r<10?'0'+r:r); }
@@ -509,12 +601,43 @@ if(closeLeader) closeLeader.addEventListener('click', function(){ if(leaderModal
 
 // ---- Init ------------------------------------------------------------------
 (function init(){ try{
-  var saved = localStorage.getItem('memDifficulty')||'easy'; if(diffSel){ diffSel.value = (['easy','medium','hard','hard_split','random'].indexOf(saved)>-1)?saved:'easy'; }
-  document.documentElement.style.setProperty('--card-min', (state.cardMin||170)+'px'); document.documentElement.style.setProperty('--card-text', (state.textSize||12)+'px');
-  if(flipSlider){ flipSlider.value = state.flipDelay; flipVal.textContent = (state.flipDelay/1000).toFixed(1)+'s'; flipSlider.addEventListener('input', function(){ state.flipDelay = Number(flipSlider.value); flipVal.textContent = (state.flipDelay/1000).toFixed(1)+'s'; localStorage.setItem('memFlipDelay', state.flipDelay); }); }
-  if(sizeSlider){ sizeSlider.value = state.cardMin; sizeVal.textContent = state.cardMin+'px'; document.documentElement.style.setProperty('--card-min', state.cardMin+'px'); sizeSlider.addEventListener('input', function(){ state.cardMin = Number(sizeSlider.value); sizeVal.textContent = state.cardMin+'px'; document.documentElement.style.setProperty('--card-min', state.cardMin+'px'); localStorage.setItem('memCardMin', state.cardMin); }); }
-  if(textSlider){ textSlider.value = state.textSize; textSizeVal.textContent = state.textSize+'px'; document.documentElement.style.setProperty('--card-text', state.textSize+'px'); textSlider.addEventListener('input', function(){ state.textSize = Number(textSlider.value); textSizeVal.textContent = state.textSize+'px'; document.documentElement.style.setProperty('--card-text', state.textSize+'px'); localStorage.setItem('memTextSize', state.textSize); }); }
-  boardEl.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:var(--muted); padding:24px 0">Modus wählen und <b>Start</b> klicken. Neu: <b>Randomizer</b> (60% neu / 40% bekannt) im Spaltenmodus.</div>'; if(startBtn){ startBtn.classList.add('pulse'); }
+  var saved = localStorage.getItem('memDifficulty')||'easy';
+  if(diffSel){ diffSel.value = (['easy','medium','hard','hard_split','random'].indexOf(saved)>-1)?saved:'easy'; }
+  if(flipSlider){
+    flipSlider.value = state.flipDelay;
+    flipVal.textContent = (state.flipDelay/1000).toFixed(1)+'s';
+    flipSlider.addEventListener('input', function(){
+      state.flipDelay = Number(flipSlider.value);
+      flipVal.textContent = (state.flipDelay/1000).toFixed(1)+'s';
+      localStorage.setItem('memFlipDelay', state.flipDelay);
+    });
+  }
+  if(sizeSlider){
+    sizeSlider.min = String(CARD_MIN_COMPACT);
+    if(!sizeSlider.max){ sizeSlider.max = String(CARD_MIN_MAX); }
+    sizeSlider.value = String(state.cardMin);
+    sizeSlider.addEventListener('input', function(){
+      state.cardMin = Number(sizeSlider.value);
+      applyCardSize(true);
+    });
+  }
+  if(textSlider){
+    textSlider.value = String(state.textSize);
+    textSlider.addEventListener('input', function(){
+      state.textSize = Number(textSlider.value);
+      applyTextSize(true);
+    });
+  }
+  applyCardSize(false);
+  applyTextSize(false);
+  if(window.matchMedia){
+    compactMedia = window.matchMedia(COMPACT_QUERY);
+    if(compactMedia.addEventListener){ compactMedia.addEventListener('change', handleCompactChange); }
+    else if(compactMedia.addListener){ compactMedia.addListener(handleCompactChange); }
+    handleCompactChange(compactMedia);
+  }
+  boardEl.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:var(--muted); padding:24px 0">Modus wählen und <b>Start</b> klicken. Neu: <b>Randomizer</b> (60% neu / 40% bekannt) im Spaltenmodus + <b>Mobile Auto-Größe</b> für vier Karten pro Reihe.</div>';
+  if(startBtn){ startBtn.classList.add('pulse'); }
 } catch(e){ console.error(e); } })();
   </script>
 </body>
