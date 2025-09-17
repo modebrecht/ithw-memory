@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <!--
   Project: IT‑Hardware Memory (Hauptspiel)
-  Version: 2.6 (Main)
-  Date: 2025-08-30 (Europe/Zurich)
-  Changes vs 2.4:
-    • Randomizer‑Set: VRAM hinzugefügt.
-    • Randomizer‑Set: Gehäuselüfter hinzugefügt.
-    • Randomizer‑Set: AIO‑Wasserkühlung hinzugefügt.
+  Version: 2.7 (Main)
+  Date: 2025-09-30 (Europe/Zurich)
+  Changes vs 2.6:
+    • Mobile: Automatische Kartengrößen-/Textanpassung inkl. Slider-Sync.
+    • Mobile: Standardmäßig vier Karten pro Zeile im Split-Modus (Mix/Randomizer).
+    • Mobile: Verbesserte responsive Abstände für kompakte Displays.
 -->
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>🧩 IT‑Hardware Memory – v2.5</title>
+  <title>🧩 IT‑Hardware Memory – v2.7</title>
   <style>
     :root{
       --bg:#0f1115; --card:#171a21; --card-front:#1f2430; --accent:#13c2c2; --good:#19be6b; --bad:#ff4d4f; --text:#e8ecf1; --muted:#9aa4b2; --grid-gap:8px;
@@ -71,6 +71,20 @@
     .scorelist table{ width:100%; border-collapse:collapse; font-size:12px; color:var(--muted) }
     .scorelist th,.scorelist td{ padding:6px 8px; border-bottom:1px solid #253148; text-align:left }
     .scorelist th{ color:var(--text) }
+
+    @media (max-width: 700px){
+      :root{
+        --grid-gap:2px;
+        --card-min:80px;
+        --card-text:11px;
+      }
+      header{ padding:16px 12px 10px }
+      main{ margin:16px auto; padding:0 12px 24px }
+      .controls{ gap:8px }
+      select,button{ font-size:13px; padding:8px 10px }
+      .stats{ flex-wrap:wrap; gap:8px }
+      .stat{ flex:1 1 calc(50% - 4px); min-width:130px }
+    }
   </style>
 </head>
 <body>
@@ -95,7 +109,7 @@
         <span id="flipVal">1.1s</span>
       </label>
       <label style="color:var(--muted); display:flex; align-items:center; gap:8px">Kartengröße:
-        <input id="cardSize" type="range" min="100" max="300" step="10" value="170" />
+        <input id="cardSize" type="range" min="60" max="300" step="10" value="170" />
         <span id="sizeVal">170px</span>
       </label>
       <label style="color:var(--muted); display:flex; align-items:center; gap:8px">Textgröße:
@@ -143,7 +157,7 @@
   </div>
 
   <script>
-// ===== IT‑Hardware Memory – v2.5 Script =====
+// ===== IT‑Hardware Memory – v2.7 Script =====
 (function(){ window.addEventListener('error', function(e){ try{ var bar=document.getElementById('jsError'); if(!bar){ bar=document.createElement('div'); bar.id='jsError'; bar.style.cssText='position:fixed;left:0;right:0;bottom:0;background:#3b0b0b;color:#fff;padding:8px 12px;font:12px/1.4 system-ui;z-index:9999;'; document.body.appendChild(bar);} bar.textContent='JS-Fehler: '+e.message+(e.lineno?(' @'+e.lineno+(e.colno?(':'+e.colno):'')):''); }catch(_){}}); })();
 
 // ---- Datensätze ------------------------------------------------------------
@@ -227,6 +241,149 @@ var leaderModal = document.getElementById('leaderModal');
 var leaderContent = document.getElementById('leaderContent');
 var closeLeader = document.getElementById('closeLeader');
 
+// ---- Responsive Setup ------------------------------------------------------
+var DEFAULT_CARD_MIN = 170;
+var DEFAULT_TEXT_SIZE = 12;
+var MOBILE_CARD_DEFAULT = 80;
+var MOBILE_TEXT_DEFAULT = 11;
+var MOBILE_BREAKPOINT = 700;
+var MOBILE_GRID_GAP = 2;
+var DESKTOP_GRID_GAP = 8;
+var manualSizeOverride = false;
+var manualTextOverride = false;
+var compactMql = window.matchMedia('(max-width: '+MOBILE_BREAKPOINT+'px)');
+var lastViewportMode = compactMql.matches ? 'compact' : 'regular';
+
+function readStoredNumber(key){
+  var raw = localStorage.getItem(key);
+  if(raw===null) return null;
+  var num = Number(raw);
+  return Number.isFinite(num) ? num : null;
+}
+
+function clampCardSize(val){
+  var min = sizeSlider ? Number(sizeSlider.min)||60 : 60;
+  var max = sizeSlider ? Number(sizeSlider.max)||300 : 300;
+  var step = sizeSlider ? Number(sizeSlider.step)||10 : 10;
+  if(!Number.isFinite(val)) val = min;
+  var clamped = Math.max(min, Math.min(max, val));
+  clamped = Math.round(clamped/step)*step;
+  if(clamped < min) clamped = min;
+  if(clamped > max) clamped = max;
+  return clamped;
+}
+
+function clampTextSize(val){
+  var min = textSlider ? Number(textSlider.min)||10 : 10;
+  var max = textSlider ? Number(textSlider.max)||32 : 32;
+  if(!Number.isFinite(val)) val = min;
+  var clamped = Math.max(min, Math.min(max, val));
+  clamped = Math.round(clamped);
+  if(clamped < min) clamped = min;
+  if(clamped > max) clamped = max;
+  return clamped;
+}
+
+function computeCompactDefaultCardMin(){
+  var mainEl = document.querySelector('main');
+  var available = 0;
+  if(mainEl){
+    var style = window.getComputedStyle ? getComputedStyle(mainEl) : null;
+    var paddingLeft = style ? parseFloat(style.paddingLeft||'0') : 0;
+    var paddingRight = style ? parseFloat(style.paddingRight||'0') : 0;
+    available = mainEl.clientWidth - paddingLeft - paddingRight;
+  }
+  if(!available || !Number.isFinite(available) || available <= 0){
+    var vw = window.innerWidth || document.documentElement.clientWidth || 0;
+    if(vw){
+      available = Math.min(vw, 1100) - 32;
+    }
+  }
+  if(!available || !Number.isFinite(available) || available <= 0){
+    available = 4*MOBILE_CARD_DEFAULT + 3*MOBILE_GRID_GAP;
+  }
+  var perCard = Math.floor((available - (3*MOBILE_GRID_GAP)) / 4);
+  if(!Number.isFinite(perCard) || perCard <= 0){
+    perCard = MOBILE_CARD_DEFAULT;
+  }
+  var step = sizeSlider ? Number(sizeSlider.step)||10 : 10;
+  var snapped = Math.round(perCard/step)*step;
+  if(snapped > perCard){
+    snapped = Math.floor(perCard/step)*step;
+  }
+  if(!Number.isFinite(snapped) || snapped <= 0){
+    snapped = MOBILE_CARD_DEFAULT;
+  }
+  var minAttr = sizeSlider ? Number(sizeSlider.min)||60 : 60;
+  if(snapped < minAttr){
+    snapped = minAttr;
+  }
+  if(snapped > MOBILE_CARD_DEFAULT){
+    snapped = MOBILE_CARD_DEFAULT;
+  }
+  return snapped;
+}
+
+function computeInitialCardMin(){
+  var saved = readStoredNumber('memCardMin');
+  var savedViewport = localStorage.getItem('memCardMinViewport') || '';
+  if(compactMql.matches){
+    if(saved !== null && savedViewport === 'compact'){
+      return clampCardSize(saved);
+    }
+    return clampCardSize(computeCompactDefaultCardMin());
+  }
+  if(saved !== null && (savedViewport === 'regular' || savedViewport === '')){
+    return clampCardSize(saved);
+  }
+  return DEFAULT_CARD_MIN;
+}
+
+function computeInitialTextSize(){
+  var saved = readStoredNumber('memTextSize');
+  var savedViewport = localStorage.getItem('memTextSizeViewport') || '';
+  if(compactMql.matches){
+    if(saved !== null && savedViewport === 'compact'){
+      return clampTextSize(saved);
+    }
+    return clampTextSize(MOBILE_TEXT_DEFAULT);
+  }
+  if(saved !== null && (savedViewport === 'regular' || savedViewport === '')){
+    return clampTextSize(saved);
+  }
+  return DEFAULT_TEXT_SIZE;
+}
+
+function syncCardSizeValue(val){
+  var size = clampCardSize(val);
+  document.documentElement.style.setProperty('--card-min', size+'px');
+  if(sizeSlider) sizeSlider.value = String(size);
+  if(sizeVal) sizeVal.textContent = size+'px';
+}
+
+function syncTextSizeValue(val){
+  var size = clampTextSize(val);
+  document.documentElement.style.setProperty('--card-text', size+'px');
+  if(textSlider) textSlider.value = String(size);
+  if(textSizeVal) textSizeVal.textContent = size+'px';
+}
+
+function syncGridGap(){
+  document.documentElement.style.setProperty('--grid-gap', (compactMql.matches?MOBILE_GRID_GAP:DESKTOP_GRID_GAP)+'px');
+}
+
+function applyResponsiveDefaults(force){
+  if(force || !manualSizeOverride){
+    state.cardMin = computeInitialCardMin();
+    syncCardSizeValue(state.cardMin);
+  }
+  if(force || !manualTextOverride){
+    state.textSize = computeInitialTextSize();
+    syncTextSizeValue(state.textSize);
+  }
+  syncGridGap();
+}
+
 // ---- State -----------------------------------------------------------------
 function resetState(){
   return {
@@ -236,14 +393,33 @@ function resetState(){
     combo:0, maxCombo:0, comboBonus:0, totalPairs:0,
     timer:null, startTime:null,
     flipDelay: Number(localStorage.getItem('memFlipDelay')) || 1100,
-    cardMin: Number(localStorage.getItem('memCardMin')) || 170,
-    textSize: Number(localStorage.getItem('memTextSize')) || 12,
+    cardMin: computeInitialCardMin(),
+    textSize: computeInitialTextSize(),
     // Spaltenmodussteuerung
     autoSelectPermit:false,
     modeSplit:false, deckLeft:[], deckRight:[], selectedLeft:null
   };
 }
 var state = resetState();
+
+function handleViewportChange(){
+  var current = compactMql.matches ? 'compact' : 'regular';
+  if(current !== lastViewportMode){
+    lastViewportMode = current;
+    manualSizeOverride = false;
+    manualTextOverride = false;
+  }
+  applyResponsiveDefaults(false);
+}
+if(typeof compactMql.addEventListener === 'function'){ compactMql.addEventListener('change', handleViewportChange); }
+else if(typeof compactMql.addListener === 'function'){ compactMql.addListener(handleViewportChange); }
+
+var resizeTimer=null;
+function onWindowResize(){
+  if(resizeTimer){ clearTimeout(resizeTimer); }
+  resizeTimer = setTimeout(function(){ resizeTimer=null; applyResponsiveDefaults(false); }, 140);
+}
+window.addEventListener('resize', onWindowResize);
 
 // ---- Utils -----------------------------------------------------------------
 function formatTime(ms){ var s=Math.floor(ms/1000), m=Math.floor(s/60), r=s%60; return (m<10?'0'+m:m)+':' + (r<10?'0'+r:r); }
@@ -424,8 +600,18 @@ function startGame(){
   if(['easy','medium','hard','hard_split','random'].indexOf(diff)===-1) diff='easy';
   state.difficulty = diff; localStorage.setItem('memDifficulty', diff);
   if(flipSlider){ state.flipDelay=Number(flipSlider.value); localStorage.setItem('memFlipDelay', state.flipDelay); }
-  if(sizeSlider){ state.cardMin=Number(sizeSlider.value); localStorage.setItem('memCardMin', state.cardMin); document.documentElement.style.setProperty('--card-min', state.cardMin+'px'); }
-  if(textSlider){ state.textSize=Number(textSlider.value); localStorage.setItem('memTextSize', state.textSize); document.documentElement.style.setProperty('--card-text', state.textSize+'px'); }
+  if(sizeSlider){
+    state.cardMin = clampCardSize(Number(sizeSlider.value));
+    syncCardSizeValue(state.cardMin);
+    localStorage.setItem('memCardMin', state.cardMin);
+    localStorage.setItem('memCardMinViewport', compactMql.matches ? 'compact' : 'regular');
+  }
+  if(textSlider){
+    state.textSize = clampTextSize(Number(textSlider.value));
+    syncTextSizeValue(state.textSize);
+    localStorage.setItem('memTextSize', state.textSize);
+    localStorage.setItem('memTextSizeViewport', compactMql.matches ? 'compact' : 'regular');
+  }
 
   state.modeSplit = (diff==='hard_split' || diff==='random');
   if(diff==='hard_split'){ var d1=createSplitDeck(); state.deckLeft=d1.left; state.deckRight=d1.right; state.totalPairs=state.deckLeft.length; }
@@ -510,11 +696,31 @@ if(closeLeader) closeLeader.addEventListener('click', function(){ if(leaderModal
 // ---- Init ------------------------------------------------------------------
 (function init(){ try{
   var saved = localStorage.getItem('memDifficulty')||'easy'; if(diffSel){ diffSel.value = (['easy','medium','hard','hard_split','random'].indexOf(saved)>-1)?saved:'easy'; }
-  document.documentElement.style.setProperty('--card-min', (state.cardMin||170)+'px'); document.documentElement.style.setProperty('--card-text', (state.textSize||12)+'px');
+  applyResponsiveDefaults(true);
   if(flipSlider){ flipSlider.value = state.flipDelay; flipVal.textContent = (state.flipDelay/1000).toFixed(1)+'s'; flipSlider.addEventListener('input', function(){ state.flipDelay = Number(flipSlider.value); flipVal.textContent = (state.flipDelay/1000).toFixed(1)+'s'; localStorage.setItem('memFlipDelay', state.flipDelay); }); }
-  if(sizeSlider){ sizeSlider.value = state.cardMin; sizeVal.textContent = state.cardMin+'px'; document.documentElement.style.setProperty('--card-min', state.cardMin+'px'); sizeSlider.addEventListener('input', function(){ state.cardMin = Number(sizeSlider.value); sizeVal.textContent = state.cardMin+'px'; document.documentElement.style.setProperty('--card-min', state.cardMin+'px'); localStorage.setItem('memCardMin', state.cardMin); }); }
-  if(textSlider){ textSlider.value = state.textSize; textSizeVal.textContent = state.textSize+'px'; document.documentElement.style.setProperty('--card-text', state.textSize+'px'); textSlider.addEventListener('input', function(){ state.textSize = Number(textSlider.value); textSizeVal.textContent = state.textSize+'px'; document.documentElement.style.setProperty('--card-text', state.textSize+'px'); localStorage.setItem('memTextSize', state.textSize); }); }
-  boardEl.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:var(--muted); padding:24px 0">Modus wählen und <b>Start</b> klicken. Neu: <b>Randomizer</b> (60% neu / 40% bekannt) im Spaltenmodus.</div>'; if(startBtn){ startBtn.classList.add('pulse'); }
+  if(sizeSlider){
+    sizeSlider.value = String(state.cardMin);
+    sizeVal.textContent = state.cardMin+'px';
+    sizeSlider.addEventListener('input', function(){
+      manualSizeOverride = true;
+      state.cardMin = clampCardSize(Number(sizeSlider.value));
+      syncCardSizeValue(state.cardMin);
+      localStorage.setItem('memCardMin', state.cardMin);
+      localStorage.setItem('memCardMinViewport', compactMql.matches ? 'compact' : 'regular');
+    });
+  }
+  if(textSlider){
+    textSlider.value = String(state.textSize);
+    textSizeVal.textContent = state.textSize+'px';
+    textSlider.addEventListener('input', function(){
+      manualTextOverride = true;
+      state.textSize = clampTextSize(Number(textSlider.value));
+      syncTextSizeValue(state.textSize);
+      localStorage.setItem('memTextSize', state.textSize);
+      localStorage.setItem('memTextSizeViewport', compactMql.matches ? 'compact' : 'regular');
+    });
+  }
+  boardEl.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:var(--muted); padding:24px 0">Modus wählen und <b>Start</b> klicken. Neu: <b>Randomizer</b> (60% neu / 40% bekannt) im Spaltenmodus · Mobile: Auto-Kartengröße (Mix/Randomizer = 4 Karten nebeneinander).</div>'; if(startBtn){ startBtn.classList.add('pulse'); }
 } catch(e){ console.error(e); } })();
   </script>
 </body>
